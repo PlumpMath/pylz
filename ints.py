@@ -5,6 +5,9 @@
 from math import log, ceil
 
 
+'''Utilities to convert integers to bytes objects and back again.'''
+
+
 ###############################################################################
 
 
