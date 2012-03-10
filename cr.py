@@ -162,6 +162,18 @@ class UnsentError(Exception):
 
 
 @coroutine
+def printer():
+    '''Coroutine. Print whatever is sent.
+
+    [dabeaz 38]
+
+    '''
+    while True:
+        x = yield
+        print(x)
+
+
+@coroutine
 def filesink(fd, close=False, quiet=False):
     '''Coroutine. Consume bytes objects. Write them to the file-like fd.
 
