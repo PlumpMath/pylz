@@ -2,6 +2,7 @@
 
 
 # stdlib
+import os
 import sys
 import argparse
 # local
@@ -43,8 +44,8 @@ def encode(nxt, quiet=False):
     try:
         while True:
             # extend the buffer by one byte
-            byte = yield
-            block += byte
+            num = yield
+            block += bytes([num])
             # compress the block if it is unfamiliar
             if block not in table:
                 table[block] = blocknum
@@ -68,14 +69,15 @@ def encode(nxt, quiet=False):
 ## Decoder
 
 
+@cr.composedin(cr.trickle, None)
 @cr.coroutine
 def decode(nxt, quiet=False):
-    '''Decompress a stream of bytes compressed with "lz.encode".
+    '''Decompress a stream of bytes compressed by "lz.encode".
 
-    Consume single bytes. Produce decompressed bytes.
+    Consume bytes. Produce decompressed bytes.
 
     When finished:
-#      Send remaining uncompressed buffer.
+###      Send buffer as a lone prefix. (If any leftover)
       Print a message to stderr. (Set quiet to True to disable)
 
     '''
@@ -125,12 +127,41 @@ def decode(nxt, quiet=False):
 ## Main
 
 
+def readfrom(args):
+    return args.file or sys.stdin.buffer
+
+
+def writeto(parser, args, suf):
+    def shortername():
+        if args.file.name.endswith(suf):
+            return args.file.name[:-len(suf)]
+        else:
+            parser.error('{}: unknown suffix -- ignored'.
+                         format(args.file.name))
+    def longername():
+        if not args.file.name.endswith(suf):
+            return args.file.name + suf
+        else:
+            parser.error('{} already has {} suffix -- unchanged'.
+                         format(args.file.name, suf))
+    def afile():
+        fn = shortername() if args.decompress else longername()
+        if not os.path.exists(fn):
+            return open(fn, mode='wb')
+        else:
+            parser.error('{} already exists; not overwritten'.format(fn))
+    # -- in --
+    return sys.stdout.buffer if args.stdout else afile()
+
+
 DESC = '''Compress or decompress data with Lempel-Ziv. Given no file or given
 -, read from standard input and write to standard output. This program does
 not perform error correction (don't entrust your important data to it yet).'''
 
 
 if __name__ == '__main__':
+
+    # parse arguments
     ap = argparse.ArgumentParser(description=DESC)
     ap.add_argument('-c', '--stdout', action='store_true',
                     help='write to standard output instead of a file')
@@ -141,58 +172,23 @@ if __name__ == '__main__':
     ap.add_argument('file', nargs='?', type=argparse.FileType('rb'),
                     help='file to read')
     ns = ap.parse_args()
-    #
-    print(ns)
-    print()
-    # compress or decompress? <-- "-d" option
-    # read stdin or a file?   <-- presence or absence of file argument
-    # write stdout or a file? <-- "-c" option or no "-c" option and a file
-    #
-    # a. stdin to stdout "lz -c -"      or "lz -c"
-    # b. file  to stdout "lz -c file"
-    # c. stdin to file   "lz -"         or "lz"    <- gzip assumes "-c" in this case
-    # d. file  to file   "lz file"
-    #
-    # file is None OR "-c" option is given --> write to standard out
 
-    # where do we read from?
+    # read stdin implies write stdout
     if ns.file is None:
-        # from stdin
-        s = sys.stdin.buffer
-    else:
-        # from a file
-        s = ns.file
+        ns.stdout = True
 
-    # where do we write to?
-    if ns.file is None or ns.stdout:
-        # to stdout
-        t = sys.stdout.buffer
-    else:
-        # to a file
-        #
-        if ns.decompress and ns.file.name[-3:] != '.lz'
+    print(ns)
 
-    # don't decompress a file with an unknown suffix
-    if ns.decompress and ns.file and ns.file.name[-3:] != '.lz':
-        pass
+    # get source and sink file objects
+    s = readfrom(ns)
+    t = writeto(ap, ns, '.plz')
 
-#
-#     if ns.stdout:
-#         t = sys.stdout.buffer
-#     else:
-#         fn = ns.file.name + ('.lz' if
-#         t = open(
-#
-#
-#     if '-c' in sys.argv:
-#         s = sys.stdin.buffer
-#         t = sys.stdout.buffer
-#     elif sys.argv[1:]:
-#         s = open(sys.argv[1], mode='rb')
-#         t = open(sys.argv[2], mode='wb')
-#     else:
-#         print(    # start actual source and sink
-#     cr.filesource(s, lz.encode(util.filesink(t)))
+    # start pipeline
+    print('s', s)
+    print('t', t)
+    q = not ns.verbose
+    proc = decode if ns.decompress else encode
+    cr.filesource(s, proc(cr.filesink(t, quiet=q), quiet=q), quiet=q)
 
 
 ###############################################################################
