@@ -147,7 +147,7 @@ def format_time(milliseconds):
 
 
 @cr.coroutine
-def coroutine(nxt, total, timeout=1, callback=None, count=lambda x: 1):
+def cr(nxt, total, timeout=1, callback=None, count=lambda x: 1):
     '''Coroutine. Send anything consumed to nxt. Indicate progress.
 
     total:
