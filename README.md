@@ -1,12 +1,13 @@
 # Lempel-Ziv via Coroutines
 
-This is a byte-level implementation of Lempel-Ziv in which each block contains some number of bytes to reference its known-prefix and exactly one new-byte.
+This is a byte-level implementation of Lempel-Ziv (each block contains some number of bytes to reference its known-prefix and exactly one new-byte).
 
 - Blocks refer to their known-prefix with absolute addressing.
-- The first block has no reference to a prefix.
-- The last block may or may not have a new-byte.
+- The first block has no bytes to reference a prefix.
+- The last block won't have a new-byte if the encoder didn't reach unique data.
+- No error correction is performed. Incorrect data results in a crash.
 
-This program does not perform error correction at this time, so don't entrust your important data to it.
+The encoder and decoder are implemented as coroutines which accumulate bytes until there is enough information to send bytes to the next processing stage.
 
 -- [PLR](http://f06mote.com)
 
