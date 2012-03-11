@@ -42,12 +42,12 @@ def encode(nxt, quiet=False):
     table = {} # map known chunks to blockids
     try:
         for blockid in itertools.count():
-            nums = []
+            chunkm = bytearray()
             chunk = None
             # accumulate an unfamiliar chunk
             while chunk in table or chunk is None:
-                nums.append((yield))
-                chunk = bytes(nums)
+                chunkm.append((yield))
+                chunk = bytes(chunkm)
             # remember the chunk
             table[chunk] = blockid
             # compress the chunk to a block
@@ -57,13 +57,13 @@ def encode(nxt, quiet=False):
             # send the block
             nxt.send(pointerb + newbyte)
     finally:
-        if nums:
-            pointer = table[bytes(nums)]
+        if chunkm:
+            pointer = table[chunk]
             pointerb = ints.tobytes(pointer, length=ints.bytewidth(blockid))
             # send partial block
             nxt.send(pointerb)
         if not quiet:
-            ct = blockid + (0.5 if nums else 0)
+            ct = blockid + (0.5 if chunkm else 0)
             print('lz.encoder: {} blocks done'.format(ct), file=sys.stderr)
 
 
@@ -86,11 +86,11 @@ def decode(nxt, quiet=False):
     table = {} # map blockids to known chunks
     try:
         for blockid in itertools.count():
-            nums = []
+            blockm = bytearray()
             # accumulate the next block
             for _ in range(ints.bytewidth(blockid) + 1):
-                nums.append((yield))
-            block = bytes(nums)
+                blockm.append((yield))
+            block = bytes(blockm)
             # decompress the block to a chunk
             pointerb, newbyte = block[:-1], block[-1:]
             pointer = ints.frombytes(pointerb)
@@ -100,12 +100,12 @@ def decode(nxt, quiet=False):
             # send the chunk
             nxt.send(table[blockid])
     finally:
-        if nums:
-            pointerb = bytes(nums)
+        if blockm:
+            pointerb = bytes(blockm)
             pointer = ints.frombytes(pointerb)
             nxt.send(table[pointer])
         if not quiet:
-            ct = blockid + (0.5 if nums else 0)
+            ct = blockid + (0.5 if blockm else 0)
             print('lz.decoder: {} blocks done'.format(ct), file=sys.stderr)
 
 
@@ -163,15 +163,11 @@ if __name__ == '__main__':
     if ns.file is None:
         ns.stdout = True
 
-    print(ns)
-
     # get source and sink file objects
     s = readfrom(ns)
     t = writeto(ap, ns, '.plz')
 
     # start pipeline
-    print('s', s)
-    print('t', t)
     q = not ns.verbose
     proc = decode if ns.decompress else encode
     cr.filesource(s, proc(cr.filesink(t, quiet=q), quiet=q), quiet=q)
