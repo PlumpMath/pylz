@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
 
+# stdlib
+import functools
+
+
 '''Coroutine support utilities.
 
 "A generator is a function that produces a sequence of results instead of a
@@ -53,7 +57,7 @@ def filesource(fd, nxt, chunk=512, close=True, quiet=False):
         nxt.close()
 
 
-def compose(*coroutines, splitargs=None):
+def compose(*coroutines, splitargs=None, wraps=None):
     '''Function to produce the composition of coroutines (a premade pipeline).
 
     For example:
@@ -71,6 +75,10 @@ def compose(*coroutines, splitargs=None):
         given to the last coroutine in the pipeline, and it is assumed
         that each other coroutine takes the next one as its only
         argument.
+
+    wraps:
+        Optional. The index of the coroutine argument which has the docstring
+        which the resultant composition should also have.
 
     '''
     if splitargs is None:
@@ -100,6 +108,9 @@ def compose(*coroutines, splitargs=None):
             nxt = cr(*args, **kwargs)
         return nxt
 
+    if wraps is not None:
+        composition = functools.wraps(coroutines[wraps])(composition)
+
     return composition
 
 
@@ -113,6 +124,7 @@ def coroutine(f):
     [dabeaz 27]
 
     '''
+    @functools.wraps(f)
     def prime(*args, **kwargs):
         c = f(*args, **kwargs)
         c.send(None)
@@ -142,8 +154,9 @@ def composedin(*coroutines, splitargs=None):
     crs = list(coroutines) or [None]
 
     def do_composition(f):
-        crs[crs.index(None)] = f
-        return compose(*crs, splitargs=splitargs)
+        wrapped = crs.index(None)
+        crs[wrapped] = f
+        return compose(*crs, splitargs=splitargs, wraps=wrapped)
 
     return do_composition
 
