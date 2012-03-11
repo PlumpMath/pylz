@@ -1,11 +1,24 @@
+#!/usr/bin/env python3
+
+
 # stdlib
 import sys
 import time
+# local
+import cr
+
+
+###############################################################################
+## Support Functions
 
 
 def _raise(e):
     '''Allow raise in expressions.'''
     raise e
+
+
+###############################################################################
+## Progress
 
 
 class Progress:
@@ -84,8 +97,12 @@ class Progress:
         return self
 
 
+###############################################################################
+## Utilities
+
+
 def bar(message=None, width=10):
-    '''Generate a callback for Progress which makes a bar like [##---].'''
+    '''Make a callback for Progress which prints a bar like [##---].'''
     message = '' if message is None else (message + ' ')
     def fn(current, total, elapsed):
         blocks = int(float(current) / total * width)
@@ -104,7 +121,7 @@ def bar(message=None, width=10):
 
 
 def format_time(milliseconds):
-    '''Return a human-readable string from the given number of milliseconds.
+    '''Make a human-readable string from the given number of milliseconds.
 
     >>> format_time(3723004)
     '01:02:03.004'
@@ -127,3 +144,31 @@ def format_time(milliseconds):
            ('{:02}:'.format(m) if h or m else '') + \
            ('{:02}.'.format(s) if h or m or s else '') + \
            '{:03}'.format(ms)
+
+
+@cr.coroutine
+def coroutine(nxt, total, timeout=1, callback=None, count=lambda x: 1):
+    '''Coroutine. Send anything consumed to nxt. Indicate progress.
+
+    total:
+        The maximum number of things expected. When the progress of the things
+        consumed reaches total, close.
+
+    timeout:
+    callback:
+        See the Progress class.
+
+    count:
+        Optional. A function which takes a consumed thing and determines how
+        much progress it represents. By default consumed things count as one.
+
+    '''
+    with Progress(total, timeout, callback) as p:
+        while True:
+            thing = yield
+            p.next(did=count(thing))
+            nxt.send(thing)
+
+
+###############################################################################
+## EOF
