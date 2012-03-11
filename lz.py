@@ -5,6 +5,7 @@
 import os
 import sys
 import argparse
+import itertools
 # local
 import cr
 import ints
@@ -38,31 +39,32 @@ def encode(nxt, quiet=False):
       Print a message to stderr. (Set quiet to True to disable)
 
     '''
-    table = {}
-    blocknum = 0
-    block = b''
+    table = {} # map known chunks to blockids
     try:
-        while True:
-            # extend the buffer by one byte
-            num = yield
-            block += bytes([num])
-            # compress the block if it is unfamiliar
-            if block not in table:
-                table[block] = blocknum
-                known, new = block[:-1], block[-1:]
-                pfxptr = ints.tobytes(table[known] if known else blocknum,
-                                      length=ints.bytewidth(blocknum))
-                nxt.send(pfxptr + new)
-                # start again
-                blocknum += 1
-                block = b''
+        for blockid in itertools.count():
+            nums = []
+            chunk = None
+            # accumulate an unfamiliar chunk
+            while chunk in table or chunk is None:
+                nums.append((yield))
+                chunk = bytes(nums)
+            # remember the chunk
+            table[chunk] = blockid
+            # compress the chunk to a block
+            prefix, newbyte = chunk[:-1], chunk[-1:]
+            pointer = table[prefix] if prefix else blockid
+            pointerb = ints.tobytes(pointer, length=ints.bytewidth(blockid))
+            # send the block
+            nxt.send(pointerb + newbyte)
     finally:
-        if block:
-            nxt.send(ints.tobytes(table[block],
-                                  length=ints.bytewidth(blocknum)))
+        if nums:
+            pointer = table[bytes(nums)]
+            pointerb = ints.tobytes(pointer, length=ints.bytewidth(blockid))
+            # send partial block
+            nxt.send(pointerb)
         if not quiet:
-            print('lz.encoder: {} blocks done'.format(blocknum),
-                  file=sys.stderr)
+            ct = blockid + (0.5 if nums else 0)
+            print('lz.encoder: {} blocks done'.format(ct), file=sys.stderr)
 
 
 ###############################################################################
@@ -77,50 +79,34 @@ def decode(nxt, quiet=False):
     Consume bytes. Produce decompressed bytes.
 
     When finished:
-###      Send buffer as a lone prefix. (If any leftover)
+      Treat remaining bytes as a lone prefix. (If any leftover)
       Print a message to stderr. (Set quiet to True to disable)
 
     '''
-    table = {}
-    blocknum = 0
-    block = b''
+    table = {} # map blockids to known chunks
     try:
-        while True:
-            # get a byte
-            byte = yield
-            if len(byte) != 1:
-                raise ValueError('lz.decoder: got {} bytes in {}'.
-                                 format(len(byte), byte))
-            block += byte
-            # check if the block is complete; if so decompress it
-            width = ints.bytewidth(blocknum) + 1
-            if len(block) == width:
-                # split into prefix and new byte
-                pfxptr, new = block[:-1], block[-1:]
-                # expand it
-                block = pfxptr and table[ints.frombytes(pfxptr)]
-                #pfx = ... if pfxptr in table else ...
-                #table[blocknum] = (pfxptr and table[pfxptr)]) + new
-                #if pfxptr != blocknum:
-                    # lookup prefix in table
-                # remember it
-                table[pfxptr] = new
-                pints.frombytes(pfxptr)
-                #table[] = ....
-                table[block] = blocknum
-                pfxptr = ints.tobytes(table[known] if known else blocknum,
-                                      length=ints.bytewidth(blocknum))
-                nxt.send(pfxptr + new)
-                # start over
-                blocknum += 1
-                block = b''
+        for blockid in itertools.count():
+            nums = []
+            # accumulate the next block
+            for _ in range(ints.bytewidth(blockid) + 1):
+                nums.append((yield))
+            block = bytes(nums)
+            # decompress the block to a chunk
+            pointerb, newbyte = block[:-1], block[-1:]
+            pointer = ints.frombytes(pointerb)
+            prefix = b'' if pointer == blockid else table[pointer]
+            # remember the chunk
+            table[blockid] = prefix + newbyte
+            # send the chunk
+            nxt.send(table[blockid])
     finally:
-        if block:
-            nxt.send(ints.tobytes(table[block],
-                                  length=ints.bytewidth(blocknum)))
+        if nums:
+            pointerb = bytes(nums)
+            pointer = ints.frombytes(pointerb)
+            nxt.send(table[pointer])
         if not quiet:
-            print('lz.encoder: {} blocks done'.format(blocknum),
-                  file=sys.stderr)
+            ct = blockid + (0.5 if nums else 0)
+            print('lz.decoder: {} blocks done'.format(ct), file=sys.stderr)
 
 
 ###############################################################################
