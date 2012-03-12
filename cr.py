@@ -2,6 +2,7 @@
 
 
 # stdlib
+import io
 import sys
 import functools
 
@@ -32,7 +33,7 @@ Don't mix production and consumption of values in a generator, as in
 ## Support Functions
 
 
-def filesource(fd, nxt, chunk=512, close=True, quiet=False):
+def filesource(fd, nxt, chunk=io.DEFAULT_BUFFER_SIZE, close=True, quiet=False):
     '''Function to pump chunks from file-like fd into coroutine-pipeline nxt.
 
     fd:
