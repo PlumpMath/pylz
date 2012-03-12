@@ -9,6 +9,7 @@ import itertools
 # local
 import cr
 import ints
+import progress
 
 
 '''Lempel-Ziv encoder and decoder with Python3 coroutines.
@@ -113,6 +114,24 @@ def decode(nxt, quiet=False):
 ## Main
 
 
+def progressline(current, total, elapsed):
+    current = round(current / 1024, 2)
+    total = round(total / 1024, 2)
+    self = progressline
+    try:
+        self.r = (0.7 * ((current - self.p) / elapsed) +
+                  0.3 * self.r)
+        self.p = current
+    except AttributeError:
+        self.r = 0
+        self.p = 0
+    finally:
+        sys.stderr.write('\r{c:{w}}/{t}kb done, {r:.4f} kb/s{nl}'.format(
+            w=len(str(total)), c=current, t=total, r=self.r,
+            nl=('\n' if current == total else '')))
+        sys.stderr.flush()
+
+
 def readfrom(args):
     return args.file or sys.stdin.buffer
 
@@ -153,24 +172,38 @@ if __name__ == '__main__':
                     help='write to standard output instead of a file')
     ap.add_argument('-d', '--decompress', action='store_true',
                     help='decompress data instead')
-    ap.add_argument('-v', '--verbose', action='store_false',
+    ap.add_argument('-v', '--verbose', action='store_true',
                     help='print status messages to standard error')
+    ap.add_argument('-p', '--progress', action='store_true',
+                    help='show file read progress')
     ap.add_argument('file', nargs='?', type=argparse.FileType('rb'),
                     help='file to read')
     ns = ap.parse_args()
 
-    # read stdin implies write stdout
+    # read stdin implies: write stdout, no progress
     if ns.file is None:
         ns.stdout = True
+        ns.progress = False
 
     # get source and sink file objects
     s = readfrom(ns)
-    t = writeto(ap, ns, '.plz')
+    t = writeto(ap, ns, '.pylz')
 
-    # start pipeline
+    # build and launch the pipeline
     q = not ns.verbose
-    proc = decode if ns.decompress else encode
-    cr.filesource(s, proc(cr.filesink(t, quiet=q), quiet=q), quiet=q)
+    trans = decode if ns.decompress else encode
+    if ns.progress:
+        # wrap the translation with a progress bar
+        proc = (lambda *args, **kwargs:
+                progress.cr(trans(*args, **kwargs), os.stat(s.name).st_size,
+                            timeout=1, callback=progressline, count=len))
+    else:
+        # do a plain translation
+        proc = trans
+    try:
+        cr.filesource(s, proc(cr.filesink(t, quiet=q), quiet=q), quiet=q)
+    except cr.UnsentError:
+        print('lz.py: error: unsent bytes, probably corrupt')
 
 
 ###############################################################################
