@@ -126,8 +126,8 @@ def progressline(current, total, elapsed):
         self.r = 0
         self.p = 0
     finally:
-        sys.stderr.write('\r{c:{w}}/{t}kb done, {r:.4f} kb/s{nl}'.format(
-            w=len(str(total)), c=current, t=total, r=self.r,
+        sys.stderr.write('\r{c:{w}}/{t}kb done, {r} kb/s{nl}'.format(
+            w=len(str(total)), c=current, t=total, r=round(self.r, 2),
             nl=('\n' if current == total else '')))
         sys.stderr.flush()
 

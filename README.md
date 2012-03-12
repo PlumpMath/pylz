@@ -17,6 +17,11 @@ The interface is similar to a subset of the gzip interface. To find out more, ru
 - Blocks refer to their known-prefix with absolute addressing.
 - The first block has no bytes to reference a prefix.
 - The last block won't have a new-byte if the encoder didn't reach unique data.
+
+#### Other notes
+
+- It's naive! It will compress text moderately, but not most other things.
+- It's slow! Suggestions are appreciated.
 - No error correction is performed. Decoding corrupt data results in a crash.
 
 Enjoy!
