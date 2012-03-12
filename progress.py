@@ -101,12 +101,12 @@ class Progress:
 ## Utilities
 
 
-def bar(message=None, width=10):
+def bar(message=None, width=10, printto=sys.stdout):
     '''Make a callback for Progress which prints a bar like [##---].'''
     message = '' if message is None else (message + ' ')
     def fn(current, total, elapsed):
         blocks = int(float(current) / total * width)
-        sys.stdout.write('\r{}[{}{}] {:{w}}/{} {}{}'.format(
+        printto.write('\r{}[{}{}] {:{w}}/{} {}{}'.format(
             message,
             blocks * '#',
             (width - blocks) * '-',
@@ -116,7 +116,7 @@ def bar(message=None, width=10):
             '\n' if current == total else '',
             w=len(str(total)),
             ))
-        sys.stdout.flush()
+        printto.flush()
     return fn
 
 
@@ -151,8 +151,7 @@ def cr(nxt, total, timeout=1, callback=None, count=lambda x: 1):
     '''Coroutine. Send anything consumed to nxt. Indicate progress.
 
     total:
-        The maximum number of things expected. When the progress of the things
-        consumed reaches total, close.
+        The maximum number of things expected.
 
     timeout:
     callback:
